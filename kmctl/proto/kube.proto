@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option go_package = "com.wkqcosoft.kube_backend/m/kube";
+
+package kube;
+
+service KubeBackend {
+	rpc GetNodes (GetNodesRequest) returns (NodeList) {}
+
+	rpc GetNode (GetNodeRequest) returns (Node) {}
+
+	rpc GetPods (GetPodsRequest) returns (PodList) {}
+
+	rpc GetPod (GetPodRequest) returns (Pod) {}
+
+	rpc GetPodLogs (GetPodLogsRequest) returns (stream GetPodLogsResponse) {}
+
+	rpc ApplyYaml (ApplyYamlRequest) returns (ApplyYamlResponse) {}
+
+	rpc DeleteYaml (ApplyYamlRequest) returns (ApplyYamlResponse) {}
+
+	rpc UpgradeYaml (UpgradeYamlRequest) returns (UpgradeYamlResponse) {}
+}
+
+message GetNodesRequest {}
+
+message GetNodeRequest {
+	string name = 1;
+}
+
+message NodeList {
+	repeated Node nodes = 1;
+}
+
+message Node {
+	string name = 1;
+	string ip = 2;
+	string arch = 3;
+	string kernelVersion = 4;
+}
+
+message GetPodsRequest {
+	string namespace = 1;
+}
+
+message PodList {
+	repeated Pod pods = 1;
+}
+
+message GetPodRequest {
+	string name = 1;
+	string namespace = 2;
+}
+
+message Pod {
+	string name = 1;
+	string namespace = 2;
+	string label = 3;
+	string status = 4;
+	string image = 5;
+}
+
+message GetPodLogsRequest {
+	string name = 1;
+	string namespace = 2;
+}
+
+message GetPodLogsResponse {
+	string log = 1;
+}
+
+message ApplyYamlRequest {
+	string yaml = 1;
+}
+
+message ApplyYamlResponse {
+	string message = 1;
+}
+
+message UpgradeYamlRequest {
+	int32 type = 1;
+	string yaml = 2;
+	string version = 3;
+}
+
+message UpgradeYamlResponse {
+	string message = 1;
+}

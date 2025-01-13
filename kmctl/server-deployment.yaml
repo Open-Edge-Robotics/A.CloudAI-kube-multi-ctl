@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-backend
+  namespace: robot
+  labels:
+    app: kube-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-backend
+  template:
+    metadata:
+      labels:
+        app: kube-backend
+        name: kube-backend
+    spec:
+      containers:
+        - name: kube-backend
+          image: lgecloudroboticstask/kube_backend:2024-12-03
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - ./app serve --host 0.0.0.0
+          env:
+            - name: CGO_ENABLED
+              value: "1"
+          ports:
+            - containerPort: 50051
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
+          volumeMounts:
+            - name: database
+              mountPath: /database
+      volumes:
+        - name: database
+          hostPath:
+            path: /home/drobot/workspace/ota-updater/update_repo
+      imagePullSecrets:
+        - name: regcred
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-backend
+  namespace: robot
+spec:
+  selector:
+    app: kube-backend
+  ports:
+    - port: 8080
+      targetPort: 50051
+      protocol: TCP
+      nodePort: 30300
+  type: NodePort
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kube-backend
+rules:
+  - apiGroups: ["apps", ""]
+    resources:
+      ["pods", "nodes", "services", "deployments", "configmaps", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kube-backend
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: robot
+roleRef:
+  kind: ClusterRole
+  name: kube-backend
+  apiGroup: rbac.authorization.k8s.io
