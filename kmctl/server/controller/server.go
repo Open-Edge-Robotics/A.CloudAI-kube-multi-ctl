@@ -12,7 +12,7 @@ import (
 )
 
 type server struct {
-	kubeCon *kubeController
+	kubeCon *KubeController
 	pb.UnimplementedKubeBackendServer
 }
 
@@ -105,7 +105,7 @@ func (s *server) GetPodLogs(in *pb.GetPodLogsRequest, stream pb.KubeBackend_GetP
 	}
 
 	if err := stream.Send(&pb.GetPodLogsResponse{
-		Log: logs,
+		Log: *logs,
 	}); err != nil {
 		log.Printf("Failed to send logs: %v", err)
 		return err
@@ -123,10 +123,10 @@ func (s *server) ApplyYaml(ctx context.Context, in *pb.ApplyYamlRequest) (*pb.Ap
 		return nil, err
 	}
 
-	log.Printf("ApplyYamlResponse: %s", message)
+	log.Printf("ApplyYamlResponse: %s", *message)
 
 	return &pb.ApplyYamlResponse{
-		Message: message,
+		Message: *message,
 	}, nil
 }
 
@@ -137,10 +137,10 @@ func (s *server) DeleteYaml(ctx context.Context, in *pb.ApplyYamlRequest) (*pb.A
 		return nil, err
 	}
 
-	log.Printf("DeleteYamlResponse: %s", message)
+	log.Printf("DeleteYamlResponse: %s", *message)
 
 	return &pb.ApplyYamlResponse{
-		Message: message,
+		Message: *message,
 	}, nil
 }
 
@@ -151,95 +151,63 @@ func (s *server) UpgradeYaml(ctx context.Context, in *pb.UpgradeYamlRequest) (*p
 		return nil, err
 	}
 
-	log.Printf("UpgradeYamlResponse: %s", message)
-	majorStr, minor1Str, minor2Str, err := getVersionFromFlag(&in.Version)
+	log.Printf("UpgradeYamlResponse: %s", *message)
+	major, minor1, minor2, err := parseVersion(in.Version)
 	if err != nil {
 		log.Println(err)
-		return nil, err
-	}
-	major, err := strconv.Atoi(majorStr)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	minor1, err := strconv.Atoi(minor1Str)
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	minor2, err := strconv.Atoi(minor2Str)
-	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
 	databasePath := "/database/database.db"
 	dbCon := controller.NewDB(&databasePath)
 
-	switch in.Type {
-	case 0:
-		log.Printf("Upgrade Micom Manager Ver %d.%d.%d\n", major, minor1, minor2)
-		repo := controller.Repo{
-			Repo_name:   "MICOM_MANAGER",
-			Ver_major:   major,
-			Ver_minor_1: minor1,
-			Ver_minor_2: minor2,
-			Updated_at:  "CURRENT_TIMESTAMP",
-		}
-		tableName := "micom_managers"
-		dbCon.InsertRepo(&tableName, &repo)
-	case 1:
-		log.Printf("Upgrade Device Bringup Ver %d.%d.%d\n", major, minor1, minor2)
-		repo := controller.Repo{
-			Repo_name:   "DEVICE_BRINGUP",
-			Ver_major:   major,
-			Ver_minor_1: minor1,
-			Ver_minor_2: minor2,
-			Updated_at:  "CURRENT_TIMESTAMP",
-		}
-		tableName := "device_bringups"
-		dbCon.InsertRepo(&tableName, &repo)
-	case 2:
-		log.Printf("Upgrade Navigation Ver %d.%d.%d\n", major, minor1, minor2)
-		repo := controller.Repo{
-			Repo_name:   "NAVIGATION",
-			Ver_major:   major,
-			Ver_minor_1: minor1,
-			Ver_minor_2: minor2,
-			Updated_at:  "CURRENT_TIMESTAMP",
-		}
-		tableName := "navigations"
-		dbCon.InsertRepo(&tableName, &repo)
-	case 3:
-		log.Printf("Upgrade Middleware Ver %d.%d.%d\n", major, minor1, minor2)
-		repo := controller.Repo{
-			Repo_name:   "MIDDLEWARE",
-			Ver_major:   major,
-			Ver_minor_1: minor1,
-			Ver_minor_2: minor2,
-			Updated_at:  "CURRENT_TIMESTAMP",
-		}
-		tableName := "middlewares"
-		dbCon.InsertRepo(&tableName, &repo)
-	default:
+	repoNames := []string{"MICOM_MANAGER", "DEVICE_BRINGUP", "NAVIGATION", "MIDDLEWARE"}
+	tableNames := []string{"micom_managers", "device_bringups", "navigations", "middlewares"}
+
+	if in.Type < 0 || in.Type >= int32(len(repoNames)) {
 		log.Printf("Invalid upgrade type")
 		return nil, fmt.Errorf("invalid upgrade type")
 	}
 
-	log.Printf("UpgradeYamlResponse: %s", message)
+	log.Printf("Upgrade %s Ver %d.%d.%d\n", repoNames[in.Type], major, minor1, minor2)
+	repo := controller.Repo{
+		Repo_name:   repoNames[in.Type],
+		Ver_major:   major,
+		Ver_minor_1: minor1,
+		Ver_minor_2: minor2,
+		Updated_at:  "CURRENT_TIMESTAMP",
+	}
+	dbCon.InsertRepo(&tableNames[in.Type], &repo)
+
+	log.Printf("UpgradeYamlResponse: %s", *message)
 
 	return &pb.UpgradeYamlResponse{
-		Message: message,
+		Message: *message,
 	}, nil
 }
 
-func getVersionFromFlag(updateVersion *string) (string, string, string, error) {
-	versions := strings.Split(*updateVersion, ".")
+func parseVersion(version string) (int, int, int, error) {
+	versions := strings.Split(version, ".")
 	if len(versions) != 3 {
-		return "", "", "", fmt.Errorf("version must be in the format of <00.00.00>")
+		return 0, 0, 0, fmt.Errorf("version must be in the format of <00.00.00>")
 	}
 
-	return versions[0], versions[1], versions[2], nil
+	major, err := strconv.Atoi(versions[0])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	minor1, err := strconv.Atoi(versions[1])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	minor2, err := strconv.Atoi(versions[2])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return major, minor1, minor2, nil
 }
 
 func NewServer(kubeconfig string) *server {
